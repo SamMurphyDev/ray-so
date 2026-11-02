@@ -1,0 +1,36 @@
+# Dependencies (reinstalled inside the image)
+node_modules
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Build output (regenerated inside the image)
+.next
+out
+build
+coverage
+
+# Version control & CI
+.git
+.github
+.husky
+
+# Env & secrets
+.env
+.env*.local
+*.pem
+
+# Editor / OS cruft
+.vscode
+.idea
+.DS_Store
+
+# Docker
+Dockerfile
+.dockerignore
+
+# Misc caches
+.stylelintcache
+*.tsbuildinfo
+.vercel

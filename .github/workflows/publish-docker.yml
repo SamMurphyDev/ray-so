@@ -1,0 +1,63 @@
+name: Publish Docker image
+
+on:
+  push:
+    # Trigger a versioned release when a SemVer tag is pushed, e.g. v1.2.3
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  # Image name derived from the repo, lowercased by metadata-action: owner/repo
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # Required to push images to GitHub Packages (ghcr.io) using GITHUB_TOKEN.
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata (tags, labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            # SemVer: from a v1.2.3 git tag -> 1.2.3, 1.2 and 1
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            # Branch pushes (e.g. main) get a branch-named tag
+            type=ref,event=branch
+            # Every build also gets an immutable commit-SHA tag
+            type=sha
+          # "latest" is applied automatically on SemVer tag pushes via the
+          # default "latest=auto" flavor, so no explicit entry is needed.
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # Speed up subsequent builds by caching layers in GitHub Actions cache.
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
