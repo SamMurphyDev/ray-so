@@ -5,6 +5,7 @@ const withBundleAnalyzer = require("@next/bundle-analyzer")({
 /** @type {import('next').NextConfig} */
 
 const nextConfig = {
+  output: "standalone",
   reactStrictMode: true,
   transpilePackages: ["highlight.js"],
   experimental: {
@@ -63,8 +64,12 @@ const nextConfig = {
     return {
       fallback: [
         {
+          // Internal catch-all handler that proxies unmatched routes to the
+          // upstream defined by the FALLBACK_URL env var at request time.
+          // Keeping this internal (instead of a hardcoded external URL) lets the
+          // fallback target be configured at runtime rather than build time.
           source: "/:path*",
-          destination: "https://go.ray.so/:path*",
+          destination: "/fallback-proxy/:path*",
         },
       ],
     };

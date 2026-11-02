@@ -1,4 +1,3 @@
-/* eslint-disable @next/next/no-img-element */
 /* eslint-disable jsx-a11y/alt-text */
 
 import { alpha } from "@themes/lib/alpha";
@@ -31,6 +30,40 @@ export const size = {
 };
 export const contentType = "image/png";
 
+// Generic branded image used when a theme can't be rendered into an OG image.
+// Some themes contain values that the underlying renderer (@vercel/og / Satori)
+// rejects with an "Invalid character" error. Rather than failing the whole
+// static build, we fall back to this safe image for those themes.
+async function fallbackImage(label = "Raycast Theme") {
+  const image = new ImageResponse(
+    (
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          width: "100%",
+          height: "100%",
+          background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+          color: "white",
+          fontSize: 48,
+        }}
+      >
+        {label}
+      </div>
+    ),
+    { ...size },
+  );
+  // Buffer so the render completes here rather than during response streaming.
+  const buffer = await image.arrayBuffer();
+  return new Response(buffer, {
+    headers: {
+      "Content-Type": contentType,
+      ...Object.fromEntries(image.headers),
+    },
+  });
+}
+
 export async function generateStaticParams() {
   const themes = await getAllThemes();
   return themes.map((theme) => {
@@ -51,27 +84,29 @@ export default async function Image({ params }: { params: Promise<{ author: stri
   const theme = themes.find((t) => t.slug === slug);
 
   if (!theme) {
-    return new ImageResponse(
-      (
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            width: "100%",
-            height: "100%",
-            background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-            color: "white",
-            fontSize: 48,
-          }}
-        >
-          Theme not found
-        </div>
-      ),
-      { ...size },
-    );
+    return await fallbackImage("Theme not found");
   }
 
+  try {
+    // Materialize the image here so that any renderer error (e.g. Satori's
+    // "Invalid character") is thrown inside this try/catch instead of later,
+    // when Next.js streams the response during static export.
+    const image = await renderThemeImage(theme);
+    const buffer = await image.arrayBuffer();
+    return new Response(buffer, {
+      headers: {
+        "Content-Type": contentType,
+        ...Object.fromEntries(image.headers),
+      },
+    });
+  } catch (error) {
+    // Don't let a single unrenderable theme break the whole build / route.
+    console.error(`Failed to render OG image for theme "${slug}":`, error);
+    return await fallbackImage(theme.name ?? "Raycast Theme");
+  }
+}
+
+async function renderThemeImage(theme: Theme) {
   const [
     interData,
     inter500Data,
